@@ -8,7 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import LoginScreen       from './screens/LoginScreen';
 
 // Role-based screens
-//import ResidentDashboard from './screens/Resident/ResidentDashboard';
+import ResidentDashboard from './screens/Resident/ResidentDashboard';
 
 const Stack = createNativeStackNavigator();
 
@@ -18,7 +18,7 @@ export default function App() {
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Login"     component={LoginScreen}       />
-          {/*<Stack.Screen name="Dashboard" component={ResidentDashboard} />*/}
+          <Stack.Screen name="Dashboard" component={ResidentDashboard} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
