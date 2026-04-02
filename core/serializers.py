@@ -4,10 +4,10 @@ from .models import User, WorkerProfile, JobRequest
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'role', 'phone']
+        fields = ['id', 'username', 'email', 'role', 'phone', 'first_name', 'last_name']
 
 class WorkerProfileSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True) # Nesting user info
+    user = UserSerializer(read_only=True)
 
     class Meta:
         model = WorkerProfile
