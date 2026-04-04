@@ -1,19 +1,20 @@
 // navigation/ResidentStack.js
 // Stack navigator for all resident-role screens.
 // Screens registered here:
-//   ResidentDashboard  — main portal (root of this stack)
-//   FindWorkers        — ML match results after booking flow completes
+//   ResidentDashboard — main portal (root of this stack)
+//   FindWorkers       — ML match results after booking flow completes  (Phase 2)
+//   MyRequests        — full request history with filter tabs           (Phase 3)
 
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import ResidentDashboard from '../screens/Resident/ResidentDashboard';
 import FindWorkers       from '../screens/Resident/FindWorkers';
+import MyRequests        from '../screens/Resident/MyRequests';
 
 const Stack = createNativeStackNavigator();
 
 export default function ResidentStack({ route }) {
-  // Pass the authenticated user object down to the first screen
   const user = route.params?.user;
 
   return (
@@ -26,7 +27,11 @@ export default function ResidentStack({ route }) {
       <Stack.Screen
         name="FindWorkers"
         component={FindWorkers}
-        // request object is passed when navigating from BookingModal submit
+      />
+      <Stack.Screen
+        name="MyRequests"
+        component={MyRequests}
+        initialParams={{ user }}
       />
     </Stack.Navigator>
   );
