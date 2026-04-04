@@ -1,75 +1,40 @@
 // screens/Resident/MyRequests.js
-// Full request history screen for the resident portal.
-// Displays:
-//   - Summary stats row  (Total, Active, Completed)
-//   - Status filter tabs (All | Pending | Active | Completed)
-//   - Scrollable list of RequestCards, each expandable for detail
-//   - Inline detail panel: issue, budget, preferred start, worker,
-//     address, and a Rate Now CTA for unrated completed jobs
-//   - Empty state per filter with a Book Now shortcut
-//
-// Navigation params:
-//   user        {object} — authenticated resident (passed from ResidentStack)
-//   newRequest  {object} — optional freshly submitted request to prepend
+// State + logic:  hooks/resident/useMyRequests.js
+// Static data:    data/residentRequests.data.js (filters, detail rows, empty messages)
+// Components:     components/resident/RequestCard.js
+// Styles:         styles/MyRequests.styles.js
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  Animated, FlatList, LayoutAnimation,
-  Platform, UIManager,
+  Animated, FlatList, LayoutAnimation, Platform, UIManager,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useMyRequests } from '../../hooks/resident/useMyRequests';
+import {
+  MY_REQUESTS_FILTERS,
+  REQUEST_DETAIL_ROWS,
+  EMPTY_STATE_MESSAGES,
+} from '../../data/residentRequests.data';
 import RequestCard from '../../components/resident/RequestCard';
-import { RESIDENT_REQUESTS } from '../../constants/residentData';
-import { SERVICE_CATEGORIES } from '../../constants/services';
-import styles from '../../styles/MyRequests.styles';
-import Colors from '../../styles/colors';
+import styles      from '../../styles/MyRequests.styles';
+import Colors      from '../../styles/colors';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// Filter tab definitions 
-const FILTERS = [
-  { key: 'all',       label: 'All',       icon: 'list-outline'             },
-  { key: 'pending',   label: 'Pending',   icon: 'time-outline'             },
-  { key: 'active',    label: 'Active',    icon: 'flash-outline'            },
-  { key: 'completed', label: 'Completed', icon: 'checkmark-circle-outline' },
-];
-
-// Maps filter key → matching status values
-const FILTER_STATUSES = {
-  all:       ['pending', 'matched', 'in_progress', 'completed'],
-  pending:   ['pending'],
-  active:    ['matched', 'in_progress'],
-  completed: ['completed'],
-};
-
-// Detail row config for the inline expanded panel
-const DETAIL_ROWS = [
-  { key: 'issue',           label: 'PROBLEM',         icon: 'alert-circle-outline'  },
-  { key: 'budget',          label: 'BUDGET',          icon: 'cash-outline'          },
-  { key: 'preferred_start', label: 'PREFERRED START', icon: 'time-outline'          },
-  { key: 'address',         label: 'ADDRESS',         icon: 'location-outline'      },
-];
-
 export default function MyRequests({ route, navigation }) {
-  const insets = useSafeAreaInsets();
-  const user   = route.params?.user ?? { full_name: 'Maria Santos' };
+  const insets     = useSafeAreaInsets();
+  const user       = route.params?.user ?? { full_name: 'Maria Santos' };
+  const newRequest = route.params?.newRequest ?? null;
 
-  // Prepend any freshly submitted request passed from ResidentDashboard
-  const [requests, setRequests] = useState(() => {
-    const extra = route.params?.newRequest;
-    return extra ? [extra, ...RESIDENT_REQUESTS] : RESIDENT_REQUESTS;
-  });
-
-  const [activeFilter, setActiveFilter] = useState('all');
-  const [expandedId,   setExpandedId]   = useState(null);
+  const mr = useMyRequests(newRequest);
 
   // Entrance animation
   const pageAnim = useRef(new Animated.Value(0)).current;
@@ -82,35 +47,17 @@ export default function MyRequests({ route, navigation }) {
     transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }],
   });
 
-  // Derived counts for stat cards 
-  const totalCount     = requests.length;
-  const activeCount    = requests.filter(r => ['matched', 'in_progress'].includes(r.status)).length;
-  const completedCount = requests.filter(r => r.status === 'completed').length;
-
-  // Filtered list 
-  const filteredRequests = useMemo(() => {
-    const allowed = FILTER_STATUSES[activeFilter];
-    return requests.filter(r => allowed.includes(r.status));
-  }, [requests, activeFilter]);
-
-  // Count per filter tab (for badge pills)
-  const countFor = key => {
-    const allowed = FILTER_STATUSES[key];
-    return requests.filter(r => allowed.includes(r.status)).length;
-  };
-
-  // Toggle expanded detail 
-  function toggleExpand(id) {
+  // Animated expand toggle
+  function handleToggle(id) {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpandedId(prev => (prev === id ? null : id));
+    mr.toggleExpand(id);
   }
 
-  // Render inline detail panel 
+  // Render inline detail panel
   function renderDetail(req) {
-    const cat = SERVICE_CATEGORIES.find(c => c.value === req.service);
     return (
       <View style={styles.detailCard}>
-        {DETAIL_ROWS.map(row => {
+        {REQUEST_DETAIL_ROWS.map(row => {
           const val = req[row.key];
           if (!val) return null;
           return (
@@ -126,7 +73,7 @@ export default function MyRequests({ route, navigation }) {
           );
         })}
 
-        {/* Worker chip — shown once matched or beyond */}
+        {/* Worker chip */}
         {req.worker && (
           <View style={styles.detailRow}>
             <View style={styles.detailIconWrap}>
@@ -137,10 +84,7 @@ export default function MyRequests({ route, navigation }) {
               <View style={styles.workerChip}>
                 <LinearGradient
                   colors={[Colors.skillPrimary, Colors.emerald700]}
-                  style={{
-                    width: 24, height: 24, borderRadius: 6,
-                    alignItems: 'center', justifyContent: 'center',
-                  }}
+                  style={{ width: 24, height: 24, borderRadius: 6, alignItems: 'center', justifyContent: 'center' }}
                 >
                   <Text style={{ fontSize: 11, fontWeight: '800', color: '#fff' }}>
                     {req.worker.charAt(0)}
@@ -157,7 +101,7 @@ export default function MyRequests({ route, navigation }) {
           </View>
         )}
 
-        {/* Rate Now CTA — completed + unrated only */}
+        {/* Rate Now CTA */}
         {req.status === 'completed' && !req.rated && (
           <TouchableOpacity style={styles.rateNowBtn} activeOpacity={0.75}>
             <Ionicons name="star-outline" size={14} color={Colors.amber} />
@@ -168,15 +112,9 @@ export default function MyRequests({ route, navigation }) {
     );
   }
 
-  // Empty state per filter 
+  // Render per-filter empty state
   function renderEmpty() {
-    const messages = {
-      all:       { icon: 'clipboard-outline',        title: 'No requests yet',      sub: 'Book your first service to get started.' },
-      pending:   { icon: 'time-outline',             title: 'No pending requests',  sub: 'Pending requests are waiting to be matched.' },
-      active:    { icon: 'flash-outline',            title: 'No active jobs',       sub: 'Once a worker accepts your offer, it appears here.' },
-      completed: { icon: 'checkmark-circle-outline', title: 'No completed jobs yet',sub: 'Finished requests will show up here.' },
-    };
-    const m = messages[activeFilter];
+    const m = EMPTY_STATE_MESSAGES[mr.activeFilter];
     return (
       <View style={styles.emptyState}>
         <View style={styles.emptyIconWrap}>
@@ -184,12 +122,8 @@ export default function MyRequests({ route, navigation }) {
         </View>
         <Text style={styles.emptyText}>{m.title}</Text>
         <Text style={styles.emptySubText}>{m.sub}</Text>
-        {activeFilter === 'all' && (
-          <TouchableOpacity
-            style={styles.emptyBtn}
-            onPress={() => navigation.navigate('ResidentDashboard')}
-            activeOpacity={0.85}
-          >
+        {mr.activeFilter === 'all' && (
+          <TouchableOpacity style={styles.emptyBtn} onPress={() => navigation.navigate('ResidentDashboard')} activeOpacity={0.85}>
             <LinearGradient
               colors={[Colors.skillPrimary, Colors.emerald700]}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
@@ -208,13 +142,9 @@ export default function MyRequests({ route, navigation }) {
     <View style={styles.root}>
       <StatusBar style="dark" />
 
-      {/* ── Header bar ── */}
+      {/* Header bar */}
       <View style={[styles.headerBar, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.75}
-        >
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.75}>
           <Ionicons name="chevron-back" size={20} color={Colors.textBody} />
         </TouchableOpacity>
         <View style={styles.headerTextBlock}>
@@ -223,18 +153,15 @@ export default function MyRequests({ route, navigation }) {
         </View>
       </View>
 
-      {/* ── Stats row ── */}
+      {/* Stats row */}
       <Animated.View style={[styles.statsWrap, makeSlide(pageAnim)]}>
         <View style={styles.statsRow}>
           {[
-            { value: totalCount,     label: 'Total',     color: Colors.skillDark,    bg: Colors.skillLight  },
-            { value: activeCount,    label: 'Active',    color: Colors.skillPrimary, bg: Colors.emerald100  },
-            { value: completedCount, label: 'Completed', color: Colors.amber,        bg: Colors.amberBg     },
+            { value: mr.totalCount,     label: 'Total',     color: Colors.skillDark,    bg: Colors.skillLight  },
+            { value: mr.activeCount,    label: 'Active',    color: Colors.skillPrimary, bg: Colors.emerald100  },
+            { value: mr.completedCount, label: 'Completed', color: Colors.amber,        bg: Colors.amberBg     },
           ].map(stat => (
-            <View
-              key={stat.label}
-              style={[styles.statCard, { backgroundColor: stat.bg, borderColor: Colors.borderBase }]}
-            >
+            <View key={stat.label} style={[styles.statCard, { backgroundColor: stat.bg, borderColor: Colors.borderBase }]}>
               <Text style={[styles.statValue, { color: stat.color }]}>{stat.value}</Text>
               <Text style={styles.statLabel}>{stat.label}</Text>
             </View>
@@ -242,38 +169,23 @@ export default function MyRequests({ route, navigation }) {
         </View>
       </Animated.View>
 
-      {/* ── Filter tabs ── */}
+      {/* Filter tabs */}
       <Animated.View style={[styles.filterWrap, makeSlide(pageAnim)]}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
-        >
-          {FILTERS.map(f => {
-            const isActive = activeFilter === f.key;
-            const count    = countFor(f.key);
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+          {MY_REQUESTS_FILTERS.map(f => {
+            const isActive = mr.activeFilter === f.key;
+            const count    = mr.countFor(f.key);
             return (
               <TouchableOpacity
                 key={f.key}
                 style={[styles.filterTab, isActive && styles.filterTabActive]}
-                onPress={() => {
-                  setExpandedId(null);
-                  setActiveFilter(f.key);
-                }}
+                onPress={() => mr.setActiveFilter(f.key)}
                 activeOpacity={0.75}
               >
-                <Ionicons
-                  name={f.icon}
-                  size={13}
-                  color={isActive ? Colors.skillPrimary : Colors.textMuted}
-                />
-                <Text style={[styles.filterTabText, isActive && styles.filterTabTextActive]}>
-                  {f.label}
-                </Text>
+                <Ionicons name={f.icon} size={13} color={isActive ? Colors.skillPrimary : Colors.textMuted} />
+                <Text style={[styles.filterTabText, isActive && styles.filterTabTextActive]}>{f.label}</Text>
                 <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
-                  <Text style={[styles.filterCountText, isActive && styles.filterCountTextActive]}>
-                    {count}
-                  </Text>
+                  <Text style={[styles.filterCountText, isActive && styles.filterCountTextActive]}>{count}</Text>
                 </View>
               </TouchableOpacity>
             );
@@ -281,30 +193,21 @@ export default function MyRequests({ route, navigation }) {
         </ScrollView>
       </Animated.View>
 
-      {/* ── Request list ── */}
-      {filteredRequests.length === 0 ? (
-        renderEmpty()
-      ) : (
+      {/* Request list */}
+      {mr.filteredRequests.length === 0 ? renderEmpty() : (
         <FlatList
-          data={filteredRequests}
+          data={mr.filteredRequests}
           keyExtractor={item => String(item.id)}
-          contentContainerStyle={[
-            styles.listContent,
-            { paddingBottom: insets.bottom + 32 },
-          ]}
+          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 32 }]}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (
             <>
-              <RequestCard
-                req={item}
-                onPress={() => toggleExpand(item.id)}
-              />
-              {expandedId === item.id && renderDetail(item)}
+              <RequestCard req={item} onPress={() => handleToggle(item.id)} />
+              {mr.expandedId === item.id && renderDetail(item)}
             </>
           )}
         />
       )}
-
     </View>
   );
 }
