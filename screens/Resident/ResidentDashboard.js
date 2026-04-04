@@ -176,8 +176,11 @@ export default function ResidentDashboard({ route, navigation }) {
         <Animated.View style={makeSlide(listAnim)}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Popular Services</Text>
-            <TouchableOpacity activeOpacity={0.7}>
-              <Text style={styles.seeAll}>Browse all</Text>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('MyRequests', { user })}
+            >
+              <Text style={styles.seeAll}>See All</Text>
             </TouchableOpacity>
           </View>
 
