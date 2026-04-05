@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
 # dependencies
@@ -39,3 +40,10 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+=======
+venv/
+db.sqlite3
+__pycache__/
+*.pyc
+.env
+>>>>>>> e69935e (Skill-Link-Cdo-Backend)
