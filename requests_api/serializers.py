@@ -1,20 +1,28 @@
+# requests_api/serializers.py
 from rest_framework import serializers
 from .models import JobRequest, JobOffer, Rating
 
 
 class JobRequestSerializer(serializers.ModelSerializer):
-    resident_name = serializers.CharField(source='resident.full_name', read_only=True)
-    category_name = serializers.CharField(source='category.category_name', read_only=True)
+    resident_name = serializers.CharField(
+        source='resident.full_name', read_only=True
+    )
+    category_name = serializers.CharField(
+        source='category.category_name', read_only=True
+    )
 
     class Meta:
         model = JobRequest
         fields = [
             'id', 'resident', 'resident_name', 'category', 'category_name',
-            'title', 'description', 'location_address', 'location_lat', 'location_lng',
-            'budget_min', 'budget_max', 'preferred_start_date', 'status',
-            'created_at', 'updated_at',
+            'title', 'description', 'location_address', 'location_lat',
+            'location_lng', 'budget_min', 'budget_max', 'preferred_start_date',
+            'status', 'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'status', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'resident': {'required': False},  # ← injected by the view, not the frontend
+        }
 
 
 class JobOfferSerializer(serializers.ModelSerializer):
