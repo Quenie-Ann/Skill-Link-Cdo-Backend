@@ -1,3 +1,4 @@
+# workers/views.py
 from django.shortcuts import render
 
 # Create your views here.
@@ -9,13 +10,21 @@ from .models import WorkerProfile, SkillCategory
 from .serializers import WorkerProfileSerializer, WorkerCreateSerializer, SkillCategorySerializer
 from requests_api.models import JobOffer, JobRequest
 from requests_api.serializers import JobOfferSerializer
+from skilllink.permissions import IsAdmin, IsWorker
+from rest_framework.permissions import IsAuthenticated
 
 
 class WorkerListCreateView(APIView):
+    """
+    GET  /api/workers/   → Admin: list all workers
+    POST /api/workers/   → Admin: register a walk-in worker (FR-WRK-06)
+    """
+    permission_classes = [IsAuthenticated, IsAdmin]
+ 
     def get(self, request):
         workers = WorkerProfile.objects.select_related('skill_category', 'user').all()
         return Response(WorkerProfileSerializer(workers, many=True).data)
-
+ 
     def post(self, request):
         ser = WorkerCreateSerializer(data=request.data)
         if ser.is_valid():
@@ -25,6 +34,7 @@ class WorkerListCreateView(APIView):
 
 
 class WorkerVerifyView(APIView):
+    permission_classes = [IsAdmin]
     def patch(self, request, pk):
         try:
             worker = WorkerProfile.objects.get(pk=pk)
@@ -39,6 +49,7 @@ class WorkerVerifyView(APIView):
 
 
 class WorkerSuspendView(APIView):
+    permission_classes = [IsAdmin]
     def patch(self, request, pk):
         try:
             worker = WorkerProfile.objects.get(pk=pk)
@@ -50,6 +61,7 @@ class WorkerSuspendView(APIView):
 
 
 class WorkerProfileView(APIView):
+    permission_classes = [IsWorker]
     def get(self, request):
         try:
             profile = request.user.worker_profile
@@ -89,6 +101,7 @@ class WorkerProfileView(APIView):
 
 
 class WorkerAvailabilityView(APIView):
+    permission_classes = [IsWorker]
     def patch(self, request):
         try:
             profile = request.user.worker_profile
@@ -110,6 +123,7 @@ class WorkerAvailabilityView(APIView):
 
 
 class WorkerStatsView(APIView):
+    permission_classes = [IsWorker]
     def get(self, request):
         try:
             profile = request.user.worker_profile
@@ -127,6 +141,7 @@ class WorkerStatsView(APIView):
 
 
 class WorkerOnlineStatusView(APIView):
+    permission_classes = [IsWorker]
     def patch(self, request):
         try:
             profile = request.user.worker_profile
@@ -138,6 +153,7 @@ class WorkerOnlineStatusView(APIView):
 
 
 class WorkerPendingMatchView(APIView):
+    permission_classes = [IsWorker]
     def get(self, request):
         try:
             profile = request.user.worker_profile
@@ -152,6 +168,7 @@ class WorkerPendingMatchView(APIView):
 
 
 class WorkerActiveJobView(APIView):
+    permission_classes = [IsWorker]
     def get(self, request):
         try:
             profile = request.user.worker_profile
@@ -164,6 +181,7 @@ class WorkerActiveJobView(APIView):
 
 
 class WorkerAcceptMatchView(APIView):
+    permission_classes = [IsWorker]
     def post(self, request, match_id):
         try:
             offer = JobOffer.objects.get(pk=match_id, worker=request.user.worker_profile)
@@ -177,6 +195,7 @@ class WorkerAcceptMatchView(APIView):
 
 
 class WorkerDeclineMatchView(APIView):
+    permission_classes = [IsWorker]
     def post(self, request, match_id):
         try:
             offer = JobOffer.objects.get(pk=match_id, worker=request.user.worker_profile)
@@ -190,6 +209,7 @@ class WorkerDeclineMatchView(APIView):
 
 
 class WorkerCompleteJobView(APIView):
+    permission_classes = [IsWorker]
     def post(self, request, job_id):
         try:
             offer = JobOffer.objects.get(pk=job_id, worker=request.user.worker_profile)
@@ -199,8 +219,48 @@ class WorkerCompleteJobView(APIView):
         offer.request.save()
         return Response({'jobId': str(job_id), 'completed': True})
 
-
+class WorkerDetailView(APIView):
+    """
+    DELETE /api/workers/<uuid>/
+ 
+    Soft-deletes a worker account by suspending the linked User and
+    marking the WorkerProfile as rejected. The profile record is retained
+    in compliance with RA 10173 (data retention). The user's is_active is
+    set to False, which prevents login without removing any records.
+ 
+    Hard deletion is intentionally not implemented — see ERD Section 5.2.
+    """
+    permission_classes = [IsAuthenticated, IsAdmin]
+ 
+    def delete(self, request, pk):
+        try:
+            worker = WorkerProfile.objects.select_related('user').get(pk=pk)
+        except WorkerProfile.DoesNotExist:
+            return Response({'error': 'Worker not found'}, status=404)
+ 
+        user = worker.user
+        user.status    = 'suspended'
+        user.is_active = False
+        user.save(update_fields=['status', 'is_active'])
+ 
+        worker.verification_status = 'rejected'
+        worker.is_suspended        = True
+        worker.is_online           = False
+        worker.save(update_fields=['verification_status', 'is_suspended', 'is_online'])
+ 
+        return Response(
+            {
+                'id':      str(pk),
+                'deleted': True,
+                'note':    (
+                    'Account suspended and profile rejected per RA 10173 soft-deletion policy. '
+                    'Records are retained; the user cannot log in.'
+                ),
+            },
+            status=200,
+        )
 class SkillCategoryListView(APIView):
     def get(self, request):
         cats = SkillCategory.objects.filter(is_active=True)
         return Response(SkillCategorySerializer(cats, many=True).data)
+

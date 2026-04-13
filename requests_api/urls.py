@@ -1,7 +1,8 @@
+# requests_api/urls.py
 from django.urls import path
 from .views import (
     RequestListCreateView, RequestStatusView, ResidentRequestsView,
-    JobHistoryView, RatingCreateView,
+    JobHistoryView, RatingCreateView, SendOfferView,
     StatsView, WeeklyStatsView, SkillBreakdownView, MatchLogsView, ActivityFeedView,
 )
 
@@ -11,6 +12,8 @@ urlpatterns = [
     path('resident/requests/', ResidentRequestsView.as_view()),
     path('jobs/history/', JobHistoryView.as_view()),
     path('ratings/', RatingCreateView.as_view()),
+    path('requests/<uuid:request_id>/send-offer/<uuid:worker_id>/',
+         SendOfferView.as_view()),
     # Admin analytics
     path('stats/', StatsView.as_view()),
     path('stats/weekly/', WeeklyStatsView.as_view()),

@@ -1,6 +1,7 @@
+# workers/urls.py
 from django.urls import path
 from .views import (
-    WorkerListCreateView, WorkerVerifyView, WorkerSuspendView,
+    WorkerListCreateView, WorkerVerifyView, WorkerSuspendView, WorkerDetailView,
     WorkerProfileView, WorkerAvailabilityView, WorkerStatsView,
     WorkerOnlineStatusView, WorkerPendingMatchView, WorkerActiveJobView,
     WorkerAcceptMatchView, WorkerDeclineMatchView, WorkerCompleteJobView,
@@ -11,6 +12,7 @@ urlpatterns = [
     path('workers/', WorkerListCreateView.as_view()),
     path('workers/<uuid:pk>/verify/', WorkerVerifyView.as_view()),
     path('workers/<uuid:pk>/suspend/', WorkerSuspendView.as_view()),
+    path('workers/<uuid:pk>/', WorkerDetailView.as_view()),
     path('profile/', WorkerProfileView.as_view()),
     path('worker/availability-schedule/', WorkerAvailabilityView.as_view()),
     path('worker/stats/', WorkerStatsView.as_view()),
