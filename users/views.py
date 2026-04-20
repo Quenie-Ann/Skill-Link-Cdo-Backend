@@ -59,9 +59,9 @@ class RegisterView(APIView):
                 {'error': 'Email and password are required.'},
                 status=400
             )
-        if role not in ('worker', 'resident', 'admin'):
+        if role not in ('worker', 'resident'):
             return Response(
-                {'error': 'Role must be worker, resident, or admin.'},
+                {'error': 'Role must be worker or resident.'},
                 status=400
             )
         if User.objects.filter(email=email).exists():
