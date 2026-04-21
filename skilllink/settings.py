@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'residents',
     'requests_api',
     'notifications_app',
+     'admins',
 ]
 
 MIDDLEWARE = [

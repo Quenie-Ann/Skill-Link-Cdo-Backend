@@ -24,10 +24,10 @@ urlpatterns = [
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='swagger-ui'),
     path('redoc/',   schema_view.with_ui('redoc',   cache_timeout=0), name='redoc'),
 
-    path('admin/', admin.site.urls),
     path('api/', include('users.urls')),
     path('api/', include('workers.urls')),
     path('api/', include('residents.urls')),
     path('api/', include('requests_api.urls')),
     path('api/', include('notifications_app.urls')),
+    path('api/', include('admins.urls')),
 ]
