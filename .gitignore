@@ -46,4 +46,10 @@ db.sqlite3
 __pycache__/
 *.pyc
 .env
+<<<<<<< HEAD
 >>>>>>> e69935e (Skill-Link-Cdo-Backend)
+=======
+postman/
+.postman
+staticfiles/
+>>>>>>> 2ae34738c4e6efeb878f09aa949d1e99dbed895e
