@@ -2,6 +2,8 @@
 import uuid
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
+from django.utils import timezone
+from datetime import timedelta
 
 
 class UserManager(BaseUserManager):
@@ -36,6 +38,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # [DATA] must_change_password flag
+    must_change_password = models.BooleanField(default=False)
+
     objects = UserManager()
 
     USERNAME_FIELD = 'email'
@@ -47,3 +52,51 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return f'{self.email} ({self.role})'
+
+
+class PasswordResetToken(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        'users.User',
+        on_delete=models.CASCADE,
+        related_name='password_reset_tokens'
+    )
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'password_reset_tokens'
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timedelta(minutes=15)
+        super().save(*args, **kwargs)
+
+    def is_valid(self):
+        return not self.used and timezone.now() < self.expires_at
+
+    def __str__(self):
+        return f'PasswordResetToken for {self.user.email} (used={self.used})'
+
+
+class LoginEvent(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        'users.User',
+        on_delete=models.CASCADE,
+        related_name='login_events'
+    )
+    ip_address = models.GenericIPAddressField()
+    user_agent = models.TextField()
+    device_hint = models.CharField(max_length=100, blank=True)
+    logged_in_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'login_events'
+        ordering = ['-logged_in_at']
+        indexes = [models.Index(fields=['user', 'logged_in_at'])]
+
+    def __str__(self):
+        return f'LoginEvent: {self.user.email} @ {self.ip_address} on {self.logged_in_at}'

@@ -3,9 +3,6 @@ from rest_framework.permissions import BasePermission
 
 
 class IsAdmin(BasePermission):
-    """Only barangay admins can access this endpoint."""
-    message = 'You must be a Barangay Admin to access this.'
-
     def has_permission(self, request, view):
         return (
             request.user and
@@ -14,10 +11,23 @@ class IsAdmin(BasePermission):
         )
 
 
-class IsWorker(BasePermission):
-    """Only skilled workers can access this endpoint."""
-    message = 'You must be a Skilled Worker to access this.'
+class IsOwnerOrAdmin(BasePermission):
+    def has_object_permission(self, request, view, obj):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.role == 'admin':
+            return True
+        if hasattr(obj, 'user'):
+            return obj.user == request.user
+        if hasattr(obj, 'owner') and hasattr(obj.owner, 'user'):
+            return obj.owner.user == request.user
+        return False
 
+
+class IsWorker(BasePermission):
+    """
+    Allow access only to users with role == 'worker'.
+    """
     def has_permission(self, request, view):
         return (
             request.user and
@@ -27,9 +37,9 @@ class IsWorker(BasePermission):
 
 
 class IsResident(BasePermission):
-    """Only residents can access this endpoint."""
-    message = 'You must be a Resident to access this.'
-
+    """
+    Allow access only to users with role == 'resident'.
+    """
     def has_permission(self, request, view):
         return (
             request.user and
