@@ -45,9 +45,25 @@ class WorkerCreateSerializer(serializers.ModelSerializer):
             'skill_category', 'declared_rate', 'years_experience', 'bio',
         ]
 
+    def validate_declared_rate(self, value):
+        if value < 0:
+            raise serializers.ValidationError('Declared rate cannot be negative.')
+        if value > 100000:
+            raise serializers.ValidationError('Declared rate cannot exceed 100,000.')
+        return value
+
+    def validate_years_experience(self, value):
+        if value < 0:
+            raise serializers.ValidationError('Years of experience cannot be negative.')
+        if value > 60:
+            raise serializers.ValidationError('Years of experience value is unrealistic.')
+        return value
+
     def create(self, validated_data):
         from users.models import User
         email = validated_data.pop('email')
         password = validated_data.pop('password')
-        user = User.objects.create_user(email=email, password=password, role='worker', status='active')
+        user = User.objects.create_user(
+            email=email, password=password, role='worker', status='active',
+        )
         return WorkerProfile.objects.create(user=user, **validated_data)
