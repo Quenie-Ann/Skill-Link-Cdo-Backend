@@ -5,20 +5,29 @@ from .models import User
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    # What appears in the user list
-    list_display  = ['email', 'role', 'status', 'consent_given', 'is_staff', 'created_at']
-    list_filter   = ['role', 'status', 'is_staff']
+    list_display  = ['email', 'role', 'status', 'consent_given',
+                     'deletion_requested', 'is_staff', 'created_at']
+    list_filter   = ['role', 'status', 'is_staff', 'consent_given', 'deletion_requested']
     search_fields = ['email']
     ordering      = ['email']
-    readonly_fields = ['id', 'created_at', 'updated_at']
+    readonly_fields = ['id', 'created_at', 'updated_at',
+                       'consent_timestamp', 'consent_ip_address',
+                       'deletion_requested_at']
 
-    # Override BaseUserAdmin fieldsets to match your custom User fields
-    # (BaseUserAdmin expects 'username' which your model does not have)
     fieldsets = (
         ('Credentials',   {'fields': ('email', 'password')}),
         ('Role & Status', {'fields': ('role', 'status', 'consent_given')}),
-        ('Permissions',   {'fields': ('is_staff', 'is_superuser', 'is_active', 'groups', 'user_permissions')}),
+        ('Permissions',   {'fields': ('is_staff', 'is_superuser', 'is_active',
+                                      'groups', 'user_permissions')}),
         ('Timestamps',    {'fields': ('id', 'created_at', 'updated_at')}),
+    
+        ('RA 10173 Compliance', {'fields': ('consent_timestamp',
+                                            'consent_ip_address',
+                                            'consent_version')}),
+        
+        ('Account Deletion Request', {'fields': ('deletion_requested',
+                                                  'deletion_requested_at',
+                                                  'deletion_reason')}),
     )
 
     add_fieldsets = (
