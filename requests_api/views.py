@@ -1,48 +1,168 @@
 # requests_api/views.py
+import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Count, Avg
-from .models import JobRequest, JobOffer, Rating
-from .serializers import JobRequestSerializer, JobOfferSerializer, RatingSerializer
-from workers.models import SkillCategory
+from django.db.models import Avg
+ 
+from .models import JobRequest, JobOffer, Rating, JobType
+from .serializers import JobRequestSerializer, JobOfferSerializer, RatingSerializer, JobTypeSerializer
+from workers.models import SkillCategory, WorkerProfile
+from workers.serializers import WorkerProfileSerializer
 from skilllink.permissions import IsAdmin, IsResident, IsWorker
+from .ml_client import get_matched_workers, MLServiceUnavailable
+
+logger = logging.getLogger(__name__)
+
+class JobTypeListView(APIView):
+    """
+    GET /api/job-types/?category_id=<uuid>
+ 
+    Returns active job type tiles for the given skill category.
+    The resident UI renders these as a fixed selection grid.
+    No free-text job type input is accepted.
+    """
+    permission_classes = [IsResident]
+ 
+    def get(self, request):
+        category_id = request.query_params.get('category_id')
+        if not category_id:
+            return Response(
+                {'detail': 'category_id query parameter is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        job_types = JobType.objects.filter(
+            category_id=category_id,
+            is_active=True,
+        )
+        return Response(JobTypeSerializer(job_types, many=True).data)
 
 
 class RequestListCreateView(APIView):
-
+ 
     def get_permissions(self):
         if self.request.method == 'GET':
             return [IsAdmin()]
         return [IsResident()]
-
+ 
+    # GET: unchanged
     def get(self, request):
         requests = JobRequest.objects.select_related(
             'resident', 'category'
         ).all().order_by('-created_at')
         return Response(JobRequestSerializer(requests, many=True).data)
-
+ 
+    # POST: refactored to include ML matching
     def post(self, request):
-        # Auto-attach the logged-in resident's profile
+ 
+        # Step 1 — Auto-attach the logged-in resident's profile
         try:
             resident_profile = request.user.resident_profile
         except Exception:
             return Response(
                 {'error': 'Resident profile not found. Please contact the admin.'},
-                status=400
+                status=status.HTTP_400_BAD_REQUEST,
             )
-
+ 
         data = request.data.copy()
         data['resident'] = str(resident_profile.id)
-
+ 
         ser = JobRequestSerializer(data=data)
-        if ser.is_valid():
-            ser.save()
-            return Response(ser.data, status=201)
-
-        # Print errors to Django terminal so we can see exactly what's missing
-        print("JobRequest validation errors:", ser.errors)
-        return Response(ser.errors, status=400)
+        if not ser.is_valid():
+            print("JobRequest validation errors:", ser.errors)
+            return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+ 
+        job_request = ser.save()
+ 
+        # Step 2 — Validate job_type belongs to the declared category (if provided)
+        if job_request.job_type_id:
+            try:
+                JobType.objects.get(
+                    id=job_request.job_type_id,
+                    category=job_request.category,
+                    is_active=True,
+                )
+            except JobType.DoesNotExist:
+                job_request.delete()
+                return Response(
+                    {'detail': 'The selected job type does not belong to the declared skill category.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+ 
+        # Step 3 — Pre-filter verified candidates
+        # Hard constraints: verified status + matching skill category + not suspended.
+        candidates = WorkerProfile.objects.filter(
+            skill_category=job_request.category,
+            verification_status='verified',
+            is_suspended=False,
+        ).select_related('user', 'skill_category')
+ 
+        if not candidates.exists():
+            logger.info(
+                "Job request %s — no verified candidates in category '%s'.",
+                job_request.id,
+                job_request.category,
+            )
+            return Response(
+                {
+                    'job_request':     JobRequestSerializer(job_request).data,
+                    'matched_workers': [],
+                    'message':         'No verified workers are currently available in this category.',
+                },
+                status=status.HTTP_200_OK,
+            )
+ 
+        # Step 4 — Call the ML service
+        # On failure the job_request is preserved in pending_match for retry.
+        try:
+            ranked = get_matched_workers(job_request, candidates)
+        except MLServiceUnavailable as exc:
+            logger.error(
+                "ML service unavailable for job request %s: %s",
+                job_request.id, exc,
+            )
+            return Response(
+                {
+                    'detail': (
+                        'Our matching service is currently unavailable. '
+                        'Your request has been saved and will be processed shortly.'
+                    ),
+                    'job_request_id': str(job_request.id),
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+ 
+        # Step 5 — Fetch full worker profiles in ML-ranked order
+        ranked_ids    = [r['worker_id'] for r in ranked]
+        score_map     = {r['worker_id']: r['score']           for r in ranked}
+        breakdown_map = {r['worker_id']: r['score_breakdown'] for r in ranked}
+ 
+        profile_map = {
+            str(w.id): w
+            for w in WorkerProfile.objects.filter(
+                id__in=ranked_ids
+            ).select_related('skill_category', 'user')
+        }
+ 
+        matched_workers = []
+        for worker_id in ranked_ids:
+            worker = profile_map.get(worker_id)
+            if worker:
+                matched_workers.append({
+                    'worker':          WorkerProfileSerializer(worker).data,
+                    'score':           score_map[worker_id],
+                    'score_breakdown': breakdown_map[worker_id],
+                })
+ 
+        # Step 6 — Return job request + ranked worker list
+        return Response(
+            {
+                'job_request':     JobRequestSerializer(job_request).data,
+                'matched_workers': matched_workers,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+    
 
 class RequestStatusView(APIView):
     permission_classes = [IsAdmin]
