@@ -489,3 +489,69 @@ class DataPrivacyErasureView(APIView):
         return Response({
             'success': 'Account profile tracking frozen and queued for deletion compliance successfully.'
         }, status=status.HTTP_200_OK)
+class RequestDeletionView(APIView):
+    """
+    User submits a request to delete their own account.
+    POST /api/users/request-deletion/
+    """
+    def post(self, request):
+        user = request.user
+
+        if user.deletion_requested:
+            return Response(
+                {'error': 'You have already submitted a deletion request. Please wait for admin review.'},
+                status=400
+            )
+
+        reason = request.data.get('reason', '').strip()
+        if not reason:
+            return Response(
+                {'error': 'Please provide a reason for your deletion request.'},
+                status=400
+            )
+
+        user.deletion_requested = True
+        user.deletion_requested_at = timezone.now()
+        user.deletion_reason = reason
+        user.save()
+
+        return Response({
+            'message': 'Your account deletion request has been submitted. An admin will review it shortly.',
+            'requested_at': user.deletion_requested_at,
+        }, status=200)
+
+
+class ApproveDeletionView(APIView):
+    """
+    Admin approves or rejects a deletion request.
+    POST /api/users/<user_id>/approve-deletion/
+    """
+    permission_classes = [IsAdmin]
+
+    def post(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found.'}, status=404)
+
+        if not user.deletion_requested:
+            return Response({'error': 'This user has not requested deletion.'}, status=400)
+
+        action = request.data.get('action')
+
+        if action == 'approve':
+            user.is_active = False
+            user.status = 'suspended'
+            user.deletion_requested = False
+            user.save()
+            return Response({'message': f'Account {user.email} has been deactivated successfully.'})
+
+        elif action == 'reject':
+            user.deletion_requested = False
+            user.deletion_requested_at = None
+            user.deletion_reason = None
+            user.save()
+            return Response({'message': f'Deletion request for {user.email} has been rejected.'})
+
+        else:
+            return Response({'error': 'Action must be either approve or reject.'}, status=400)

@@ -30,3 +30,52 @@ class AdminProfile(models.Model):
 
     def __str__(self):
         return f'AdminProfile — {self.user.email} ({self.barangay_name})'
+    
+# ✅ NEW — Audit Log for RA 10173 Compliance
+class AuditLog(models.Model):
+    ACTION_CHOICES = [
+        ('verify_worker',    'Verified Worker'),
+        ('reject_worker',    'Rejected Worker'),
+        ('verify_resident',  'Verified Resident'),
+        ('reject_resident',  'Rejected Resident'),
+        ('suspend_user',     'Suspended User'),
+        ('reactivate_user',  'Reactivated User'),
+        ('approve_deletion', 'Approved Account Deletion'),
+        ('reject_deletion',  'Rejected Account Deletion'),
+        ('create_category',  'Created Skill Category'),
+        ('update_category',  'Updated Skill Category'),
+        ('cancel_job',       'Cancelled Job Request'),
+        ('login',            'Admin Login'),
+        ('logout',           'Admin Logout'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    admin = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='audit_logs'
+    )
+    action = models.CharField(max_length=50, choices=ACTION_CHOICES)
+    target_email = models.EmailField(null=True, blank=True)
+    detail = models.TextField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'audit_logs'
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f'{self.admin.email} → {self.action} at {self.timestamp}'
+
+
+
+
+
+    
+
+
+
+
+

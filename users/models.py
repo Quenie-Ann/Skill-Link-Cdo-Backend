@@ -41,6 +41,16 @@ class User(AbstractBaseUser, PermissionsMixin):
     # [DATA] must_change_password flag
     must_change_password = models.BooleanField(default=False)
 
+    
+    consent_timestamp = models.DateTimeField(null=True, blank=True)
+    consent_ip_address = models.GenericIPAddressField(null=True, blank=True)
+    consent_version = models.CharField(max_length=10, default='1.0')
+
+    
+    deletion_requested = models.BooleanField(default=False)
+    deletion_requested_at = models.DateTimeField(null=True, blank=True)
+    deletion_reason = models.TextField(null=True, blank=True)
+
     objects = UserManager()
 
     USERNAME_FIELD = 'email'
@@ -100,3 +110,4 @@ class LoginEvent(models.Model):
 
     def __str__(self):
         return f'LoginEvent: {self.user.email} @ {self.ip_address} on {self.logged_in_at}'
+    
