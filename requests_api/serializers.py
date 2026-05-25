@@ -66,23 +66,33 @@ class JobRequestSerializer(serializers.ModelSerializer):
         return data
 
 class JobOfferSerializer(serializers.ModelSerializer):
-    request_title = serializers.CharField(source='request.title', read_only=True)
-    request_description = serializers.CharField(source='request.description', read_only=True)
-    request_location = serializers.CharField(source='request.location_address', read_only=True)
-    request_status = serializers.CharField(source='request.status', read_only=True)
-    resident_name = serializers.CharField(source='request.resident.full_name', read_only=True)
-    worker_name = serializers.CharField(source='worker.full_name', read_only=True)
-    category_name = serializers.CharField(source='request.category.category_name', read_only=True)
-
+    request_title       = serializers.CharField(source='request.title',                   read_only=True)
+    request_description = serializers.CharField(source='request.description',             read_only=True)
+    request_location    = serializers.CharField(source='request.location_address',        read_only=True)
+    request_status      = serializers.CharField(source='request.status',                  read_only=True)
+    resident_name       = serializers.CharField(source='request.resident.full_name',      read_only=True)
+    worker_name         = serializers.CharField(source='worker.full_name',                read_only=True)
+    category_name       = serializers.CharField(source='request.category.category_name', read_only=True)
+ 
+    # BE-004: the worker's declared service rate in PHP.
+    # Used by the job history page to display the agreed price per job
+    # and to compute the worker's total earned across completed jobs.
+    worker_rate = serializers.DecimalField(
+        source='worker.declared_rate',
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+ 
     class Meta:
-        model = JobOffer
+        model  = JobOffer
         fields = [
             'id', 'request', 'request_title', 'request_description',
             'request_location', 'request_status',
             'resident_name', 'worker', 'worker_name', 'category_name',
+            'worker_rate',      # ← BE-004 addition
             'status', 'match_score', 'created_at',
         ]
-
 
 class RatingSerializer(serializers.ModelSerializer):
     class Meta:
