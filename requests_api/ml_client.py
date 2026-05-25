@@ -1,152 +1,106 @@
 # requests_api/ml_client.py
 #
-# Inter-Service HTTP Client — Skill-Link CDO Django Backend
-#
-# This module is the only place in the Django that communicates to ML
-# The Django API contains NO Scikit-learn or Pandas imports.
-# All ML computation is delegated to the FastAPI service.
+# Django-side HTTP client for the FastAPI ML service.
+# Updated payload to include:
+#   - job_type_name  (replaces free-text description as primary text signal)
+#   - years_experience per candidate (new scoring signal)
 
-import os
+from __future__ import annotations
+
 import logging
-import requests as http_client
- 
+import os
+from typing import Any
+
+import requests
+
 logger = logging.getLogger(__name__)
- 
-ML_SERVICE_URL    = os.environ.get("ML_SERVICE_URL", "")
-SERVICE_API_KEY   = os.environ.get("SERVICE_API_KEY", "")
-ML_TIMEOUT_SECONDS = 10  # SRS Section 7.3
- 
- 
+
+ML_SERVICE_URL = os.getenv('ML_SERVICE_URL', 'http://localhost:8001')
+SERVICE_API_KEY = os.getenv('SERVICE_API_KEY', '')
+ML_TIMEOUT_SECONDS = 10
+
+
 class MLServiceUnavailable(Exception):
-    """
-    Raised when the ML service times out, refuses the connection,
-    or returns a non-200 status. The caller catches this and returns
-    HTTP 503 to the client. The JobRequest is NOT deleted — it remains
-    in 'pending_match' status for retry.
-    """
     pass
- 
- 
-def _build_job_description(job_request) -> str:
+
+
+def _build_payload(job_request, candidates) -> dict[str, Any]:
     """
-    Constructs the TF-IDF query string from the job request.
- 
-    Primary input: job_type.description (Admin-defined canonical text).
-    Secondary input: job_request.description (optional resident note,
-    stored in the existing description field).
+    Build the POST /match/ payload from a JobRequest instance and a
+    pre-filtered WorkerProfile queryset.
+
+    job_type_name is the primary text signal — it is the admin-defined
+    label selected by the resident (e.g. 'Fix leaking pipe').
+    description carries optional resident notes as supplementary context.
+    bio is included per worker but is nullable — the ML engine handles
+    missing bios gracefully with a neutral text score.
+    years_experience is now included as a scoring signal.
     """
-    parts = []
- 
-    if job_request.job_type and job_request.job_type.description.strip():
-        parts.append(job_request.job_type.description.strip())
- 
-    if job_request.description and job_request.description.strip():
-        parts.append(job_request.description.strip())
- 
-    return " ".join(parts) if parts else ""
- 
- 
-def build_ml_payload(job_request, candidates) -> dict:
-    """
-    Builds the JSON payload for POST /match/.
- 
-    job_request : requests_api.models.JobRequest instance
-    candidates  : QuerySet of workers.models.WorkerProfile instances,
-                  already pre-filtered by Django (verified + correct category).
-    """
+    # Resolve job type name — prefer job_type.name if FK populated,
+    # fall back to job_request.title (set to specific_problem on creation)
+    job_type_name = ''
+    if job_request.job_type_id:
+        try:
+            job_type_name = job_request.job_type.name
+        except Exception:
+            pass
+    if not job_type_name:
+        job_type_name = job_request.title or ''
+
     return {
-        "job_request": {
-            "job_description": _build_job_description(job_request),
-            "budget_min":  float(job_request.budget_min)  if job_request.budget_min  is not None else None,
-            "budget_max":  float(job_request.budget_max)  if job_request.budget_max  is not None else None,
-            "location_lat": float(job_request.location_lat) if job_request.location_lat is not None else 0.0,
-            "location_lng": float(job_request.location_lng) if job_request.location_lng is not None else 0.0,
+        'job_request': {
+            'job_type_name': job_type_name,
+            'description':   job_request.description or '',
+            'budget_min':    float(job_request.budget_min) if job_request.budget_min is not None else None,
+            'budget_max':    float(job_request.budget_max) if job_request.budget_max is not None else None,
+            'location_lat':  float(job_request.location_lat) if job_request.location_lat is not None else None,
+            'location_lng':  float(job_request.location_lng) if job_request.location_lng is not None else None,
         },
-        "candidates": [
+        'candidates': [
             {
-                "worker_id":     str(w.id),
-                "bio":           w.bio or "",
-                "declared_rate": float(w.declared_rate),
-                "avg_rating":    float(w.avg_rating),
-                "address_lat":   float(w.address_lat) if w.address_lat is not None else None,
-                "address_lng":   float(w.address_lng) if w.address_lng is not None else None,
+                'worker_id':        str(w.id),
+                'declared_rate':    float(w.declared_rate),
+                'avg_rating':       float(w.avg_rating),
+                'years_experience': int(w.years_experience or 0),
+                'address_lat':      float(w.address_lat) if w.address_lat is not None else None,
+                'address_lng':      float(w.address_lng) if w.address_lng is not None else None,
+                'bio':              w.bio or '',
             }
             for w in candidates
         ],
     }
- 
- 
-def call_ml_service(payload: dict) -> list[dict]:
+
+
+def get_matched_workers(job_request, candidates) -> list[dict[str, Any]]:
     """
-    Sends POST /match/ to the FastAPI ML service.
- 
-    Returns:
-        list of { "worker_id": str, "score": float, "score_breakdown": dict }
-        ordered by composite score descending.
- 
-    Raises:
-        MLServiceUnavailable on timeout, connection error, or non-200 response.
+    Call POST /match/ on the ML service and return the ranked list.
+    Raises MLServiceUnavailable on timeout or non-200 response so the
+    Django view can return HTTP 503 without losing the job_request record.
     """
-    if not ML_SERVICE_URL:
-        logger.error("ML_SERVICE_URL environment variable is not set.")
-        raise MLServiceUnavailable("ML service URL is not configured.")
- 
-    url = f"{ML_SERVICE_URL.rstrip('/')}/match/"
-    headers = {
-        "Content-Type":  "application/json",
-        "X-Service-Key": SERVICE_API_KEY,
-    }
- 
+    payload = _build_payload(job_request, candidates)
+
     try:
-        response = http_client.post(
-            url,
+        response = requests.post(
+            f'{ML_SERVICE_URL}/match/',
             json=payload,
-            headers=headers,
+            headers={
+                'Content-Type': 'application/json',
+                'X-Service-Key': SERVICE_API_KEY,
+            },
             timeout=ML_TIMEOUT_SECONDS,
         )
-    except http_client.Timeout:
-        logger.error(
-            "ML service timed out after %ds. Job request preserved in pending_match.",
-            ML_TIMEOUT_SECONDS,
-        )
-        raise MLServiceUnavailable("ML service did not respond within the timeout window.")
-    except http_client.ConnectionError as exc:
-        logger.error("ML service connection failed: %s", exc)
-        raise MLServiceUnavailable("Unable to connect to the ML service.")
- 
+    except requests.Timeout:
+        raise MLServiceUnavailable('ML service timed out after 10 seconds.')
+    except requests.ConnectionError as exc:
+        raise MLServiceUnavailable(f'ML service connection failed: {exc}')
+
     if response.status_code == 403:
-        logger.critical(
-            "ML service returned 403. Verify SERVICE_API_KEY matches in both services."
-        )
-        raise MLServiceUnavailable("ML service authentication failed (HTTP 403).")
- 
+        raise MLServiceUnavailable('ML service rejected the request (invalid API key).')
     if response.status_code != 200:
-        logger.error(
-            "ML service returned unexpected status %d: %s",
-            response.status_code,
-            response.text[:300],
+        raise MLServiceUnavailable(
+            f'ML service returned HTTP {response.status_code}: {response.text[:200]}'
         )
-        raise MLServiceUnavailable(f"ML service returned HTTP {response.status_code}.")
- 
-    return response.json().get("ranked", [])
- 
- 
-def get_matched_workers(job_request, candidates) -> list[dict]:
-    """
-    Convenience function called by RequestListCreateView.
-    Builds the payload, calls the ML service, returns the ranked list.
- 
-    Returns an empty list if candidates is empty (no ML call made).
-    Raises MLServiceUnavailable on any failure — the view handles that.
-    """
-    if not candidates:
-        logger.info(
-            "Job request %s — no verified candidates in category '%s'. Skipping ML call.",
-            job_request.id,
-            job_request.category,
-        )
-        return []
- 
-    payload = build_ml_payload(job_request, candidates)
-    return call_ml_service(payload)
- 
+
+    data = response.json()
+    # Response shape: { "ranked": [{ "worker_id", "score", "score_breakdown" }, ...] }
+    return data.get('ranked', [])
