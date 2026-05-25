@@ -1,7 +1,8 @@
+# admins/views.py
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from .models import AdminProfile
+from .models import AdminProfile, AuditLog  
 from .serializers import AdminProfileSerializer, AdminProfileCreateSerializer
 from skilllink.permissions import IsAdmin
 
@@ -64,3 +65,32 @@ class AdminProfileUpdateView(APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+class AuditLogView(APIView):
+    """
+    GET /api/admin/audit-log/ — View all admin actions
+    """
+    permission_classes = [IsAdmin]
+
+    def get(self, request):
+        logs = AuditLog.objects.all().order_by('-timestamp')[:100]
+        data = [
+            {
+                'id':           str(log.id),
+                'admin':        log.admin.email if log.admin else 'deleted',
+                'action':       log.action,
+                'target_email': log.target_email,
+                'detail':       log.detail,
+                'ip_address':   log.ip_address,
+                'timestamp':    log.timestamp,
+            }
+            for log in logs
+        ]
+        return Response(data)
+
+
+
+
+
+
