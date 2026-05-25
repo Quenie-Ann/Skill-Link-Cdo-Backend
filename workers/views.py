@@ -11,7 +11,7 @@ from .serializers import WorkerProfileSerializer, WorkerCreateSerializer, SkillC
 from requests_api.models import JobOffer
 from requests_api.serializers import JobOfferSerializer
 from skilllink.permissions import IsAdmin, IsResident, IsWorker
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 
 
 class WorkerListCreateView(APIView):
@@ -262,6 +262,7 @@ class WorkerDetailView(APIView):
 
 # Skill Category Views    
 class SkillCategoryListView(APIView):
+    permission_classes = [AllowAny]
     def get(self, request):
         cats = SkillCategory.objects.filter(is_active=True)
         return Response(SkillCategorySerializer(cats, many=True).data)
