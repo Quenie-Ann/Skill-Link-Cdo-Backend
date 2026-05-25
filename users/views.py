@@ -164,6 +164,7 @@ class RegisterView(APIView):
                 skill_category=skill_category,
                 verification_status='pending',
             )
+
         elif role == 'resident':
             from residents.models import ResidentProfile
             ResidentProfile.objects.create(
@@ -174,12 +175,33 @@ class RegisterView(APIView):
                 verification_status='pending',
             )
 
-        return Response({
+        # Build response
+        response_data = {
             'message': f'{role.capitalize()} account created successfully.',
             'email':   user.email,
             'role':    user.role,
-            'id':      str(user.id),
-        }, status=201)
+            'id':      str(user.id),  # User ID (unchanged, para dili ma-break ang uban)
+        }
+
+        # ✅ FIX: Idugang ang worker_profile_id para ma-upload ang documents
+        if role == 'worker':
+            from workers.models import WorkerProfile
+            try:
+                profile = WorkerProfile.objects.get(user=user)
+                response_data['worker_profile_id'] = str(profile.id)
+            except WorkerProfile.DoesNotExist:
+                pass
+
+        # ✅ FIX: Idugang ang resident_profile_id para ma-upload ang document
+        if role == 'resident':
+            from residents.models import ResidentProfile
+            try:
+                profile = ResidentProfile.objects.get(user=user)
+                response_data['resident_profile_id'] = str(profile.id)
+            except ResidentProfile.DoesNotExist:
+                pass
+
+        return Response(response_data, status=201)
 
 
 class MeView(APIView):

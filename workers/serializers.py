@@ -1,6 +1,6 @@
 # workers/serializers.py
 from rest_framework import serializers
-from .models import WorkerProfile, SkillCategory, RateBand
+from .models import WorkerProfile, SkillCategory, RateBand, Document
 
 
 class SkillCategorySerializer(serializers.ModelSerializer):
@@ -15,10 +15,24 @@ class RateBandSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class DocumentSerializer(serializers.ModelSerializer):
+    file = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Document
+        fields = ['id', 'doc_type', 'file', 'original_filename', 'uploaded_at']
+
+    def get_file(self, obj):
+        if obj.file:
+            return f'http://127.0.0.1:8000{obj.file.url}'
+        return None
+
+
 class WorkerProfileSerializer(serializers.ModelSerializer):
     skill_category_name = serializers.CharField(source='skill_category.category_name', read_only=True)
     email = serializers.CharField(source='user.email', read_only=True)
     is_verified = serializers.SerializerMethodField()
+    documents = DocumentSerializer(many=True, read_only=True)  # ✅ FIXED: removed source='documents'
 
     class Meta:
         model = WorkerProfile
@@ -28,6 +42,7 @@ class WorkerProfileSerializer(serializers.ModelSerializer):
             'years_experience', 'bio', 'avg_rating', 'verification_status',
             'is_verified', 'is_online', 'is_suspended', 'availability_schedule',
             'verified_at', 'created_at',
+            'documents',
         ]
 
     def get_is_verified(self, obj):
