@@ -38,14 +38,16 @@ class JobRequestSerializer(serializers.ModelSerializer):
     def validate_location_lat(self, value):
         if value is None:
             return value
-        if not (-90.0 <= float(value) <= 90.0):
+        value = round(float(value), 7)
+        if not (-90.0 <= value <= 90.0):
             raise serializers.ValidationError('Latitude must be between -90.0 and 90.0.')
         return value
  
     def validate_location_lng(self, value):
         if value is None:
             return value
-        if not (-180.0 <= float(value) <= 180.0):
+        value = round(float(value), 7)
+        if not (-180.0 <= value <= 180.0):
             raise serializers.ValidationError('Longitude must be between -180.0 and 180.0.')
         return value
  
