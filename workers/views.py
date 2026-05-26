@@ -6,8 +6,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
-from .models import WorkerProfile, SkillCategory, RateBand, JobType
-from .serializers import WorkerProfileSerializer, WorkerCreateSerializer, SkillCategorySerializer, RateBandSerializer
+from .models import WorkerProfile, SkillCategory, RateBand, JobType, Document
+from .serializers import DocumentSerializer, RateBandSerializer, WorkerProfileSerializer, WorkerCreateSerializer, SkillCategorySerializer, RateBandSerializer
 from requests_api.models import JobOffer
 from requests_api.serializers import JobOfferSerializer
 from skilllink.permissions import IsAdmin, IsResident, IsWorker
@@ -569,3 +569,78 @@ class ResidentWorkerDirectoryView(APIView):
         if category_id:
             qs = qs.filter(skill_category_id=category_id)
         return Response(WorkerProfileSerializer(qs, many=True).data)
+
+
+class DocumentUploadView(APIView):
+    """
+    POST /api/documents/upload/
+    Accepts multipart/form-data.
+    Body fields:
+        file         — the file binary
+        doc_type     — one of: certification, barangay_clearance,
+                       government_id, proof_of_residence
+        worker_id    — UUID (required if uploader is a worker)
+        resident_id  — UUID (required if uploader is a resident)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        file        = request.FILES.get('file')
+        doc_type    = request.data.get('doc_type', '')
+        worker_id   = request.data.get('worker_id')
+        resident_id = request.data.get('resident_id')
+
+        if not file:
+            return Response({'error': 'No file provided.'}, status=400)
+
+        if doc_type not in dict(Document.DOC_TYPE_CHOICES):
+            return Response({'error': f'Invalid doc_type: {doc_type}'}, status=400)
+
+        if not worker_id and not resident_id:
+            return Response(
+                {'error': 'Either worker_id or resident_id is required.'},
+                status=400,
+            )
+
+        # --- Upload to Cloudinary ---
+        # Replace this block with Supabase Storage if you prefer.
+        try:
+            result = cloudinary.uploader.upload(
+                file,
+                folder='skilllink/documents',
+                resource_type='auto',
+            )
+            storage_url = result['secure_url']
+        except Exception as e:
+            return Response(
+                {'error': f'File upload failed: {str(e)}'},
+                status=500,
+            )
+
+        # --- Resolve owner ---
+        worker   = None
+        resident = None
+
+        if worker_id:
+            try:
+                from workers.models import WorkerProfile
+                worker = WorkerProfile.objects.get(pk=worker_id)
+            except WorkerProfile.DoesNotExist:
+                return Response({'error': 'Worker not found.'}, status=404)
+
+        if resident_id:
+            try:
+                from residents.models import ResidentProfile
+                resident = ResidentProfile.objects.get(pk=resident_id)
+            except ResidentProfile.DoesNotExist:
+                return Response({'error': 'Resident not found.'}, status=404)
+
+        doc = Document.objects.create(
+            worker=worker,
+            resident=resident,
+            doc_type=doc_type,
+            storage_url=storage_url,
+            original_filename=file.name,
+        )
+
+        return Response(DocumentSerializer(doc).data, status=201)

@@ -110,3 +110,43 @@ class WorkerProfile(models.Model):
     def __str__(self):
         return f'{self.full_name} ({self.skill_category})'
  
+class Document(models.Model):
+    DOC_TYPE_CHOICES = [
+        ('certification',     'Certification'),
+        ('barangay_clearance', 'Barangay Clearance'),
+        ('government_id',     'Government ID'),
+        ('proof_of_residence', 'Proof of Residence'),
+    ]
+
+    id             = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    worker         = models.ForeignKey(
+        WorkerProfile,
+        on_delete=models.CASCADE,
+        related_name='documents',
+        null=True,
+        blank=True,
+    )
+    # Resident documents are linked via the ResidentProfile FK below.
+    # Both worker and resident can be null so one model serves both roles.
+    resident       = models.ForeignKey(
+        'residents.ResidentProfile',
+        on_delete=models.CASCADE,
+        related_name='documents',
+        null=True,
+        blank=True,
+    )
+    doc_type       = models.CharField(max_length=30, choices=DOC_TYPE_CHOICES)
+    storage_url    = models.URLField(max_length=500)
+    original_filename = models.CharField(max_length=255)
+    uploaded_at    = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'documents'
+        indexes  = [
+            models.Index(fields=['worker']),
+            models.Index(fields=['resident']),
+        ]
+
+    def __str__(self):
+        owner = self.worker or self.resident
+        return f'{self.doc_type} — {owner}'

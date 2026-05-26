@@ -23,17 +23,13 @@ class RateBandSerializer(serializers.ModelSerializer):
  
 
 class DocumentSerializer(serializers.ModelSerializer):
-    file = serializers.SerializerMethodField()
-
     class Meta:
-        model = Document
-        fields = ['id', 'doc_type', 'file', 'original_filename', 'uploaded_at']
-
-    def get_file(self, obj):
-        if obj.file:
-            return f'http://127.0.0.1:8000{obj.file.url}'
-        return None
-
+        model  = Document
+        fields = [
+            'id', 'worker', 'resident', 'doc_type',
+            'storage_url', 'original_filename', 'uploaded_at',
+        ]
+        read_only_fields = ['id', 'uploaded_at']
 
 class WorkerProfileSerializer(serializers.ModelSerializer):
     skill_category_name = serializers.CharField(source='skill_category.category_name', read_only=True)
