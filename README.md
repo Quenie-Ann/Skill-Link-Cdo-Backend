@@ -165,9 +165,9 @@ Swagger documentation: `http://127.0.0.1:8000/swagger/`
 
 | Role           | Email                    | Password      |
 | -------------- | ------------------------ | ------------- |
-| Barangay Admin | `admin@skilllink.com`    | `admin123`    |
-| Skilled Worker | `worker@skilllink.com`   | `worker123`   |
-| Resident       | `resident@skilllink.com` | `resident123` |
+| Barangay Admin | admin@skilllinkcdo.com | SkillLink2026! | 
+| Skilled Worker | worker.bernard.lim.electrician@skilllinkcdo.com | SkillLink2026! | 
+| Resident       | resident.maria.santos.1@skilllinkcdo.com | SkillLink2026! |
 
 ---
 
@@ -193,5 +193,5 @@ Swagger documentation: `http://127.0.0.1:8000/swagger/`
 
 ## Screenshots
 
-> _(Add screenshots of the Swagger UI and ReDoc documentation pages here.)_
+> _(Screenshots of the Swagger UI documentation page.)_
 > ![Swagger UI](image.png)
