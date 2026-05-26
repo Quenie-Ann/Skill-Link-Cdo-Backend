@@ -157,7 +157,7 @@ Swagger documentation: `http://127.0.0.1:8000/swagger/`
 ## Deployment Link
 
 **Live API Base URL:** `https://skill-link-cdo-backend.onrender.com/api`
-**Swagger UI:** `https://skill-link-cdo-ml.onrender.com/swagger/`
+**Swagger UI:** `https://skill-link-cdo-backend.onrender.com/swagger/`
 
 ---
 
