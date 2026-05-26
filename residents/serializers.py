@@ -1,7 +1,13 @@
 # residents/serializers.py
 from rest_framework import serializers
-from .models import ResidentProfile
-from workers.serializers import DocumentSerializer
+from .models import ResidentProfile, ResidentDocument
+
+
+class ResidentDocumentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = ResidentDocument
+        fields = ['id', 'doc_type', 'storage_url', 'original_filename', 'uploaded_at']
+        read_only_fields = ['id', 'uploaded_at']
 
 
 class ResidentProfileSerializer(serializers.ModelSerializer):
@@ -21,8 +27,5 @@ class ResidentProfileSerializer(serializers.ModelSerializer):
         return obj.verification_status == 'verified'
 
     def get_documents(self, obj):
-        # Pull documents linked to this resident via the unified Document model
-        from residents.models import ResidentDocument
         docs = ResidentDocument.objects.filter(resident=obj)
-        return DocumentSerializer(docs, many=True).data
-    
+        return ResidentDocumentSerializer(docs, many=True).data
