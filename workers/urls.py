@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     # Existing worker views (unchanged)
-    WorkerListCreateView, WorkerVerifyView, WorkerSuspendView, WorkerDetailView,
+    WorkerDocumentListView, WorkerDocumentUploadView, WorkerListCreateView, WorkerVerifyView, WorkerSuspendView, WorkerDetailView,
     WorkerProfileView, WorkerAvailabilityView, WorkerStatsView,
     WorkerOnlineStatusView, WorkerPendingMatchView, WorkerActiveJobView,
     WorkerAcceptMatchView, WorkerDeclineMatchView, WorkerCompleteJobView,
@@ -10,7 +10,7 @@ from .views import (
     AdminSkillCategoryCreateView, AdminSkillCategoryDetailView,
     JobTypeListView, AdminJobTypeCreateView, AdminJobTypeDetailView,
     RateBandView, AdminRateBandCreateView, AdminRateBandListView,
-    DocumentUploadView,
+    
 )
  
 urlpatterns = [
@@ -30,8 +30,9 @@ urlpatterns = [
     path('worker/match/<uuid:match_id>/decline/', WorkerDeclineMatchView.as_view()),
     path('worker/job/<uuid:job_id>/complete/',    WorkerCompleteJobView.as_view()),
      
-     path('documents/upload/', DocumentUploadView.as_view()),
-    # Skill categories — public read (unchanged) 
+    path('documents/upload/', WorkerDocumentUploadView.as_view()),
+     path('workers/<uuid:pk>/documents/', WorkerDocumentListView.as_view()),
+    # Skill categories — public read
     path('skill-categories/',
          SkillCategoryListView.as_view()),
  

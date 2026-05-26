@@ -1,7 +1,7 @@
 # workers/serializers.py
 
 from rest_framework import serializers
-from .models import WorkerProfile, SkillCategory, RateBand, Document
+from .models import WorkerProfile, SkillCategory, RateBand, WorkerDocument
 
 
 class SkillCategorySerializer(serializers.ModelSerializer):
@@ -24,7 +24,7 @@ class RateBandSerializer(serializers.ModelSerializer):
 
 class DocumentSerializer(serializers.ModelSerializer):
     class Meta:
-        model  = Document
+        model  = WorkerDocument
         fields = [
             'id', 'worker', 'resident', 'doc_type',
             'storage_url', 'original_filename', 'uploaded_at',

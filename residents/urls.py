@@ -1,7 +1,7 @@
 # residents/urls.py
 
 from django.urls import path
-from .views import ResidentDetailView, ResidentListView, ResidentVerifyView, ResidentRegisterView, ResidentProfileView
+from .views import ResidentDetailView, ResidentDocumentListView, ResidentDocumentUploadView, ResidentListView, ResidentVerifyView, ResidentRegisterView, ResidentProfileView
 
 urlpatterns = [
     # Admin: list all residents
@@ -15,4 +15,7 @@ urlpatterns = [
     
     path('resident/profile/', ResidentProfileView.as_view()), 
     path('residents/<uuid:pk>/', ResidentDetailView.as_view()),
+
+    path('residents/documents/upload/', ResidentDocumentUploadView.as_view()),
+path('residents/<uuid:pk>/documents/', ResidentDocumentListView.as_view()),
 ]
