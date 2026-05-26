@@ -10,6 +10,7 @@ from .views import (
     AdminSkillCategoryCreateView, AdminSkillCategoryDetailView,
     JobTypeListView, AdminJobTypeCreateView, AdminJobTypeDetailView,
     RateBandView, AdminRateBandCreateView, AdminRateBandListView,
+    DocumentUploadView,
 )
  
 urlpatterns = [
@@ -28,7 +29,8 @@ urlpatterns = [
     path('worker/match/<uuid:match_id>/accept/',  WorkerAcceptMatchView.as_view()),
     path('worker/match/<uuid:match_id>/decline/', WorkerDeclineMatchView.as_view()),
     path('worker/job/<uuid:job_id>/complete/',    WorkerCompleteJobView.as_view()),
- 
+     
+     path('documents/upload/', DocumentUploadView.as_view()),
     # Skill categories — public read (unchanged) 
     path('skill-categories/',
          SkillCategoryListView.as_view()),
