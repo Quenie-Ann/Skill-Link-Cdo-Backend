@@ -1,11 +1,12 @@
 # residents/views.py
+from skilllink.storage import upload_to_supabase
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import (IsAuthenticated, AllowAny)
 from django.db import transaction
 
-from .models import ResidentProfile
+from .models import ResidentDocument, ResidentProfile
 from .serializers import ResidentProfileSerializer
 from skilllink.permissions import IsAdmin, IsResident
 
@@ -157,4 +158,89 @@ class ResidentProfileView(APIView):
         except Exception:
             return Response({'error': 'Profile not found'}, status=404)
         return Response(ResidentProfileSerializer(profile).data)
-    
+
+class ResidentDocumentUploadView(APIView):
+    """
+    POST /api/residents/documents/upload/
+    Uploads a resident's government ID or proof of residence to Supabase Storage.
+    Called during registration — AllowAny because the user has no token yet.
+    The resident_id ties the document to the correct profile.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        file        = request.FILES.get('file')
+        doc_type    = request.data.get('doc_type', 'government_id')
+        resident_id = request.data.get('resident_id')
+
+        if not file:
+            return Response({'error': 'No file provided.'}, status=400)
+        if not resident_id:
+            return Response({'error': 'resident_id is required.'}, status=400)
+
+        try:
+            resident = ResidentProfile.objects.get(pk=resident_id)
+        except ResidentProfile.DoesNotExist:
+            return Response({'error': 'Resident profile not found.'}, status=404)
+
+        # Validate file size — max 10 MB
+        if file.size > 10 * 1024 * 1024:
+            return Response({'error': 'File size must not exceed 10 MB.'}, status=400)
+
+        # Validate file type
+        allowed_types = ['application/pdf', 'image/jpeg', 'image/png']
+        if file.content_type not in allowed_types:
+            return Response(
+                {'error': 'Only PDF, JPG, and PNG files are allowed.'},
+                status=400,
+            )
+
+        try:
+            public_url = upload_to_supabase(
+                file=file,
+                folder='residents',
+                original_filename=file.name,
+            )
+        except Exception as exc:
+            return Response({'error': str(exc)}, status=500)
+
+        doc = ResidentDocument.objects.create(
+            resident=resident,
+            doc_type=doc_type,
+            storage_url=public_url,
+            original_filename=file.name,
+        )
+
+        return Response({
+            'id':          str(doc.id),
+            'doc_type':    doc.doc_type,
+            'storage_url': doc.storage_url,
+            'filename':    doc.original_filename,
+            'uploaded_at': doc.uploaded_at,
+        }, status=201)
+
+
+class ResidentDocumentListView(APIView):
+    """
+    GET /api/residents/<uuid:pk>/documents/
+    Admin-only — lists all documents uploaded by a resident.
+    """
+    permission_classes = [IsAdmin]
+
+    def get(self, request, pk):
+        try:
+            resident = ResidentProfile.objects.get(pk=pk)
+        except ResidentProfile.DoesNotExist:
+            return Response({'error': 'Resident not found.'}, status=404)
+
+        docs = ResidentDocument.objects.filter(resident=resident)
+        return Response([
+            {
+                'id':          str(d.id),
+                'doc_type':    d.doc_type,
+                'storage_url': d.storage_url,
+                'filename':    d.original_filename,
+                'uploaded_at': d.uploaded_at,
+            }
+            for d in docs
+        ])

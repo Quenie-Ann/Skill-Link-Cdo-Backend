@@ -22,7 +22,7 @@ class ResidentProfileSerializer(serializers.ModelSerializer):
 
     def get_documents(self, obj):
         # Pull documents linked to this resident via the unified Document model
-        from workers.models import Document
-        docs = Document.objects.filter(resident=obj)
+        from residents.models import ResidentDocument
+        docs = ResidentDocument.objects.filter(resident=obj)
         return DocumentSerializer(docs, many=True).data
     
